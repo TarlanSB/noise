@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import org.controlsfx.control.ToggleSwitch?>
+<HBox xmlns="http://javafx.com/javafx/11.0.1"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.tsb.noise.controller.MainController"
+      spacing="20"
+      styleClass="root"
+      fx:id="root">
+
+    <!-- Левая панель - основные настройки -->
+    <VBox spacing="15" HBox.hgrow="ALWAYS">
+        <!-- Заголовок -->
+        <VBox spacing="10" alignment="CENTER">
+            <Label text="📊 Мероприятия по защите от шума" styleClass="header-title"/>
+            <Label text="Автоматизация разработки проектной документации" styleClass="header-subtitle"/>
+        </VBox>
+
+        <!-- Шаг 1: Выбор директории -->
+        <TitledPane text="📁 1. Выбор директории с файлами" styleClass="titled-pane-step" expanded="true">
+            <content>
+                <VBox spacing="12" styleClass="pane-content">
+                    <Label text="Выберите папку, содержащую файлы УЗД для обработки:" styleClass="info-label"/>
+
+                    <VBox spacing="10">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Button fx:id="selectPathButton" text="📁 Выбрать папку" styleClass="primary-button"/>
+                            <Button fx:id="openOutputButton" text="📂 Открыть папку с результатами"
+                                    styleClass="secondary-button" onAction="#openOutputFolder"/>
+                        </HBox>
+
+                        <VBox spacing="5">
+                            <Label text="Текущая папка:" styleClass="subtitle-label"/>
+                            <Label fx:id="selectedPathLabel" text="Путь не выбран" styleClass="path-label"/>
+                        </VBox>
+                    </VBox>
+                </VBox>
+            </content>
+        </TitledPane>
+
+        <!-- Шаг 2: Выбор типов файлов для обработки -->
+        <TitledPane text="📄 2. Выбор типов файлов для обработки" styleClass="titled-pane-step" expanded="false">
+            <content>
+                <VBox spacing="15" styleClass="pane-content">
+                    <Label text="Выберите типы файлов для обработки:" styleClass="info-label"/>
+
+                    <!-- ТХ день/ночь -->
+                    <VBox spacing="8" styleClass="file-type-group">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="⚙️" styleClass="icon-tx"/>
+                            <Label text="Работает ТХ" styleClass="file-type-category"/>
+                        </HBox>
+                        <HBox spacing="30" alignment="CENTER_LEFT" styleClass="toggle-container">
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <ToggleSwitch fx:id="txDayToggle" styleClass="file-toggle"/>
+                                <Label text="ТХ день" styleClass="toggle-label"/>
+                            </HBox>
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <ToggleSwitch fx:id="txNightToggle" styleClass="file-toggle"/>
+                                <Label text="ТХ ночь" styleClass="toggle-label"/>
+                            </HBox>
+                        </HBox>
+                    </VBox>
+
+                    <!-- ОВ день/ночь -->
+                    <VBox spacing="8" styleClass="file-type-group">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="🌀" styleClass="icon-ov"/>
+                            <Label text="Работает ОВ" styleClass="file-type-category"/>
+                        </HBox>
+                        <HBox spacing="30" alignment="CENTER_LEFT" styleClass="toggle-container">
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <ToggleSwitch fx:id="ovDayToggle" styleClass="file-toggle"/>
+                                <Label text="ОВ день" styleClass="toggle-label"/>
+                            </HBox>
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <ToggleSwitch fx:id="ovNightToggle" styleClass="file-toggle"/>
+                                <Label text="ОВ ночь" styleClass="toggle-label"/>
+                            </HBox>
+                        </HBox>
+                    </VBox>
+
+                    <!-- ПОС день/ночь -->
+                    <VBox spacing="8" styleClass="file-type-group">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="🏗️" styleClass="icon-pos"/>
+                            <Label text="Работает ПОС" styleClass="file-type-category"/>
+                        </HBox>
+                        <HBox spacing="30" alignment="CENTER_LEFT" styleClass="toggle-container">
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <ToggleSwitch fx:id="posDayToggle" styleClass="file-toggle"/>
+                                <Label text="ПОС день" styleClass="toggle-label"/>
+                            </HBox>
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <ToggleSwitch fx:id="posNightToggle" styleClass="file-toggle"/>
+                                <Label text="ПОС ночь" styleClass="toggle-label"/>
+                            </HBox>
+                        </HBox>
+                    </VBox>
+
+                    <!-- Кнопки выбора всех/очистки -->
+                    <HBox spacing="15" alignment="CENTER_LEFT" styleClass="selection-buttons-container">
+                        <Button fx:id="selectAllButton" text="✅ Выбрать все" styleClass="secondary-button"/>
+                        <Button fx:id="clearAllButton" text="❌ Очистить все" styleClass="secondary-button"/>
+                    </HBox>
+                </VBox>
+            </content>
+        </TitledPane>
+
+        <!-- Шаг 3: Настройка операций обработки -->
+        <TitledPane text="⚙️ 3. Настройка операций обработки" styleClass="titled-pane-step" expanded="false">
+            <content>
+                <VBox spacing="20" styleClass="pane-content">
+                    <!-- Переключатель удаления звукоизоляции -->
+                    <VBox spacing="5" styleClass="operation-group">
+                        <ToggleSwitch fx:id="removeSoundIsolationToggle"
+                                      text="🗑️ Удалить строки 'Требуемая звукоизоляция'"
+                                      styleClass="operation-toggle"/>
+                        <Label text="Включите для автоматического удаления строк с 'Требуемая звукоизоляция' из колонки B"
+                               styleClass="operation-description"/>
+                    </VBox>
+
+                    <!-- Переключатель перемещения звукоизоляции преградой -->
+                    <VBox spacing="5" styleClass="operation-group">
+                        <ToggleSwitch fx:id="moveBarrierIsolationToggle"
+                                      text="🔄 Переместить 'Звукоизоляция преградой' на 3 строки выше"
+                                      styleClass="operation-toggle"/>
+                        <Label text="Включите для автоматического перемещения строк с 'Звукоизоляция преградой' на 3 строки выше"
+                               styleClass="operation-description"/>
+                    </VBox>
+
+                    <!-- Переключатель поправки -->
+                    <VBox spacing="5" styleClass="operation-group">
+                        <ToggleSwitch fx:id="correctionToggle"
+                                      text="📈 Поправка на существующее/перспективное положение"
+                                      styleClass="operation-toggle"/>
+                        <HBox spacing="10" alignment="CENTER_LEFT" styleClass="correction-input-container">
+                            <Label text="Значение поправки:" styleClass="correction-label"/>
+                            <TextField fx:id="correctionValueField"
+                                       promptText="0.0"
+                                       styleClass="correction-field"/>
+                            <Label text="дБ" styleClass="correction-label"/>
+                        </HBox>
+                        <Label text="Вставка строки с поправкой перед строками 'превышение' и обновление значений"
+                               styleClass="operation-description"/>
+                    </VBox>
+
+                    <!-- Переключатель создания перечня РТ -->
+                    <VBox spacing="5" styleClass="operation-group">
+                        <ToggleSwitch fx:id="createRtListToggle"
+                                      text="📋 Создать таблицу 'Перечень расчетных точек'"
+                                      styleClass="operation-toggle"/>
+                        <Label text="Создает отдельный Excel файл со списком всех расчетных точек из выбранной папки"
+                               styleClass="operation-description"/>
+                    </VBox>
+
+                    <!-- Переключатель создания сводной таблицы -->
+                    <VBox spacing="5" styleClass="operation-group">
+                        <ToggleSwitch fx:id="createSummaryTableToggle"
+                                      text="📊 Создать сводную таблицу РТ"
+                                      styleClass="operation-toggle"/>
+                        <Label text="Создает сводную таблицу со значениями Lэкв, ПДУ и превышений для всех расчетных точек"
+                               styleClass="operation-description"/>
+                    </VBox>
+                </VBox>
+            </content>
+        </TitledPane>
+
+        <!-- Шаг 4: Запуск обработки и статус -->
+        <VBox spacing="15" styleClass="card">
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="4" styleClass="step-number step-number-warning"/>
+                <Label text="Запуск обработки" styleClass="title-label"/>
+            </HBox>
+
+            <VBox spacing="15" styleClass="card-content">
+                <!-- Статус процесса -->
+                <VBox spacing="8">
+                    <Label fx:id="processStatusLabel" text="Выберите папку с файлами" styleClass="status-warning"/>
+                </VBox>
+
+                <!-- Прогресс бар -->
+                <VBox fx:id="progressContainer" spacing="8" visible="false" styleClass="progress-container">
+                    <ProgressBar fx:id="progressBar" progress="0" styleClass="progress-bar"/>
+                    <Label fx:id="statusLabel" text="Ожидание запуска..." styleClass="progress-label"/>
+                </VBox>
+
+                <!-- Кнопка запуска -->
+                <HBox spacing="15" alignment="CENTER_LEFT">
+                    <Button fx:id="startProcessButton" text="🚀 Начать обработку файлов" styleClass="process-button"/>
+                </HBox>
+            </VBox>
+        </VBox>
+
+        <!-- Футер -->
+        <HBox spacing="10" alignment="CENTER" styleClass="footer">
+            <Label text="⚙️" styleClass="icon"/>
+            <Label text="Noise App v1.0 | JavaFX 21 | Apache POI" styleClass="footer-text"/>
+        </HBox>
+    </VBox>
+
+    <!-- Правая панель - Лог операций -->
+    <VBox spacing="15" style="-fx-pref-width: 500;">
+        <VBox spacing="15" styleClass="card" VBox.vgrow="ALWAYS">
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="📋" styleClass="icon"/>
+                <Label text="Лог операций" styleClass="title-label"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button text="🧹 Очистить лог" onAction="#clearLog" styleClass="secondary-button"/>
+            </HBox>
+
+            <TextArea fx:id="logArea" editable="false" styleClass="log-area" VBox.vgrow="ALWAYS"/>
+
+            <!-- Кнопки быстрого доступа -->
+            <HBox spacing="10" alignment="CENTER_RIGHT">
+                <Button text="📁 Открыть исходную папку" onAction="#openSourceFolder" styleClass="small-button"/>
+                <Button text="📂 Открыть результаты" onAction="#openOutputFolder" styleClass="small-button"/>
+                <Button text="📊 Открыть перечень РТ" onAction="#openRtListFolder" styleClass="small-button"/>
+            </HBox>
+        </VBox>
+    </VBox>
+
+</HBox>
