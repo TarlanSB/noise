@@ -56,16 +56,16 @@
                         <HBox spacing="30" alignment="CENTER_LEFT" styleClass="toggle-container">
                             <HBox spacing="10" alignment="CENTER_LEFT">
                                 <ToggleSwitch fx:id="txDayToggle" styleClass="file-toggle"/>
-                                <Label text="ТХ день" styleClass="toggle-label"/>
-                            </HBox>
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <ToggleSwitch fx:id="txNightToggle" styleClass="file-toggle"/>
-                                <Label text="ТХ ночь" styleClass="toggle-label"/>
-                            </HBox>
-                        </HBox>
-                    </VBox>
+                        <!-- <Label text="ТХ день!!!" styleClass="toggle-label"/> -->
+                    </HBox>
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <ToggleSwitch fx:id="txNightToggle" styleClass="file-toggle"/>
+                        <!-- <Label text="ТХ ночь" styleClass="toggle-label"/> -->
+                    </HBox>
+                </HBox>
+            </VBox>
 
-                    <!-- ОВ день/ночь -->
+            <!-- ОВ день/ночь -->
                     <VBox spacing="8" styleClass="file-type-group">
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="🌀" styleClass="icon-ov"/>
@@ -74,16 +74,16 @@
                         <HBox spacing="30" alignment="CENTER_LEFT" styleClass="toggle-container">
                             <HBox spacing="10" alignment="CENTER_LEFT">
                                 <ToggleSwitch fx:id="ovDayToggle" styleClass="file-toggle"/>
-                                <Label text="ОВ день" styleClass="toggle-label"/>
-                            </HBox>
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <ToggleSwitch fx:id="ovNightToggle" styleClass="file-toggle"/>
-                                <Label text="ОВ ночь" styleClass="toggle-label"/>
-                            </HBox>
+                        <!--     <Label text="ОВ день" styleClass="toggle-label"/> -->
                         </HBox>
-                    </VBox>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <ToggleSwitch fx:id="ovNightToggle" styleClass="file-toggle"/>
+                        <!--     <Label text="ОВ ночь" styleClass="toggle-label"/> -->
+                        </HBox>
+                    </HBox>
+                </VBox>
 
-                    <!-- ПОС день/ночь -->
+                <!-- ПОС день/ночь -->
                     <VBox spacing="8" styleClass="file-type-group">
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="🏗️" styleClass="icon-pos"/>
@@ -92,16 +92,16 @@
                         <HBox spacing="30" alignment="CENTER_LEFT" styleClass="toggle-container">
                             <HBox spacing="10" alignment="CENTER_LEFT">
                                 <ToggleSwitch fx:id="posDayToggle" styleClass="file-toggle"/>
-                                <Label text="ПОС день" styleClass="toggle-label"/>
-                            </HBox>
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <ToggleSwitch fx:id="posNightToggle" styleClass="file-toggle"/>
-                                <Label text="ПОС ночь" styleClass="toggle-label"/>
-                            </HBox>
+                        <!--     <Label text="ПОС день" styleClass="toggle-label"/> -->
                         </HBox>
-                    </VBox>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <ToggleSwitch fx:id="posNightToggle" styleClass="file-toggle"/>
+                        <!--     <Label text="ПОС ночь" styleClass="toggle-label"/> -->
+                        </HBox>
+                    </HBox>
+                </VBox>
 
-                    <!-- Кнопки выбора всех/очистки -->
+                <!-- Кнопки выбора всех/очистки -->
                     <HBox spacing="15" alignment="CENTER_LEFT" styleClass="selection-buttons-container">
                         <Button fx:id="selectAllButton" text="✅ Выбрать все" styleClass="secondary-button"/>
                         <Button fx:id="clearAllButton" text="❌ Очистить все" styleClass="secondary-button"/>

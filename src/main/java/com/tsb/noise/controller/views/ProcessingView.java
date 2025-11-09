@@ -96,9 +96,19 @@ public class ProcessingView {
             return false;
         }
 
+        // ИСПРАВЛЕННАЯ ЛОГИКА: проверяем поправку только если она нужна для операций
         Double correctionValue = correctionValueSupplier.get();
-        if (correctionValue == null && createRtListSupplier.get()) {
-            alertHandler.showError("Ошибка", "Некорректное значение поправки. Введите числовое значение.");
+        boolean needsCorrection = removeSoundIsolationSupplier.get() ||
+                moveBarrierIsolationSupplier.get();
+
+        if (needsCorrection && correctionValue == null) {
+            alertHandler.showError("Ошибка", "Для выбранных операций требуется значение поправки. Введите числовое значение.");
+            return false;
+        }
+
+        // Дополнительная проверка: если включена поправка, но не выбраны файлы для обработки
+        if (needsCorrection && selectedFileTypes.isEmpty()) {
+            alertHandler.showError("Ошибка", "Для применения поправки необходимо выбрать типы файлов для обработки.");
             return false;
         }
 
