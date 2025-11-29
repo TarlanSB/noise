@@ -6,6 +6,7 @@ import com.tsb.noise.controller.handlers.TaskBasedProcessingHandler;
 import com.tsb.noise.controller.managers.LogManager;
 import com.tsb.noise.controller.managers.StatusManager;
 import com.tsb.noise.model.FileType;
+import com.tsb.noise.service.operations.export.SummaryTableCreator;
 import javafx.concurrent.Task;
 
 import java.util.List;
@@ -20,6 +21,7 @@ public class ProcessingView {
     private final StatusManager statusManager;
     private final AlertHandler alertHandler;
     private final LogManager logManager;
+    private final SummaryTableCreator summaryTableCreator;
 
     private final Supplier<String> directoryPathSupplier;
     private final Supplier<List<FileType>> selectedFileTypesSupplier;
@@ -34,7 +36,7 @@ public class ProcessingView {
                           ProgressManager progressManager,
                           StatusManager statusManager,
                           AlertHandler alertHandler,
-                          LogManager logManager,
+                          LogManager logManager, SummaryTableCreator summaryTableCreator,
                           Supplier<String> directoryPathSupplier,
                           Supplier<List<FileType>> selectedFileTypesSupplier,
                           Supplier<Boolean> removeSoundIsolationSupplier,
@@ -48,6 +50,7 @@ public class ProcessingView {
         this.statusManager = statusManager;
         this.alertHandler = alertHandler;
         this.logManager = logManager;
+        this.summaryTableCreator = summaryTableCreator;
         this.directoryPathSupplier = directoryPathSupplier;
         this.selectedFileTypesSupplier = selectedFileTypesSupplier;
         this.removeSoundIsolationSupplier = removeSoundIsolationSupplier;
@@ -102,7 +105,7 @@ public class ProcessingView {
                 moveBarrierIsolationSupplier.get();
 
         if (needsCorrection && correctionValue == null) {
-            alertHandler.showError("Ошибка", "Для выбранных операций требуется значение поправки. Введите числовое значение.");
+            alertHandler.showError("Ошибка", "Для операций 'Убрать звукоизоляцию' или 'Перенести барьерную изоляцию' требуется значение поправки. Введите числовое значение.");
             return false;
         }
 
@@ -111,6 +114,9 @@ public class ProcessingView {
             alertHandler.showError("Ошибка", "Для применения поправки необходимо выбрать типы файлов для обработки.");
             return false;
         }
+
+        // УБРАНА проверка связи между поправкой и созданием перечня РТ
+        // Создание перечня РТ и сводной таблицы теперь работают независимо
 
         return true;
     }

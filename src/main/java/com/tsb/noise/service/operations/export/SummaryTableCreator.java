@@ -5,18 +5,20 @@ import com.tsb.noise.service.operations.core.SheetLayoutManager;
 import com.tsb.noise.service.operations.core.StyleApplier;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
-
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Создатель сводной таблицы расчетных точек
+ * Создатель сводной таблицы расчетных точек с новой структурой (блоки по 3 строки)
  */
 @Slf4j
 public class SummaryTableCreator implements TableCreator {
@@ -30,7 +32,7 @@ public class SummaryTableCreator implements TableCreator {
     }
 
     /**
-     * Создает сводную таблицу РТ
+     * Создает сводную таблицу РТ с новой структурой
      */
     @Override
     public boolean createTable(String rootPath, boolean createSummaryTable) {
@@ -39,7 +41,7 @@ public class SummaryTableCreator implements TableCreator {
             return false;
         }
 
-        log.info("🚀 Начало создания сводной таблицы РТ...");
+        log.info("🚀 Начало создания сводной таблицы РТ с новой структурой...");
 
         try {
             // Находим все файлы для обработки
@@ -51,21 +53,24 @@ public class SummaryTableCreator implements TableCreator {
 
             log.info("✅ Найдено файлов для обработки: {}", sourceFiles.size());
 
-            // Извлекаем данные из всех файлов
-            List<SummaryData> summaryDataList = extractSummaryDataFromFiles(sourceFiles);
-            if (summaryDataList.isEmpty()) {
-                log.warn("⚠️ Не найдены данные для сводной таблицы");
+            // Сортируем файлы по номеру ШК
+            List<File> sortedFiles = sortFilesByShk(sourceFiles);
+
+            // Извлекаем уникальные РТ из всех файлов
+            Set<String> uniqueRtNames = extractUniqueRtNames(sortedFiles);
+            if (uniqueRtNames.isEmpty()) {
+                log.warn("⚠️ Не найдены РТ для сводной таблицы");
                 return false;
             }
 
-            log.info("✅ Извлечено данных РТ: {}", summaryDataList.size());
+            log.info("✅ Найдено уникальных РТ: {}", uniqueRtNames.size());
 
             // Создаем папку и файл
             File outputFolder = createOutputFolder(rootPath);
             File outputFile = createOutputFile(outputFolder);
 
-            // Создаем сводную таблицу
-            return createSummaryWorkbook(summaryDataList, outputFile);
+            // Создаем сводную таблицу с новой структурой
+            return createNewStructureWorkbook(sortedFiles, new ArrayList<>(uniqueRtNames), outputFile);
 
         } catch (Exception e) {
             log.error("❌ Ошибка при создании сводной таблицы: {}", e.getMessage(), e);
@@ -74,162 +79,505 @@ public class SummaryTableCreator implements TableCreator {
     }
 
     /**
-     * Метод для обратной совместимости
+     * Сортирует файлы по номеру ШК
      */
-    public boolean createSummaryTable(String rootPath, boolean createSummaryTable) {
-        return createTable(rootPath, createSummaryTable);
+    private List<File> sortFilesByShk(List<File> files) {
+        List<File> sortedFiles = new ArrayList<>(files);
+        sortedFiles.sort((f1, f2) -> {
+            int shk1 = extractShkNumericValue(f1.getName());
+            int shk2 = extractShkNumericValue(f2.getName());
+            return Integer.compare(shk1, shk2);
+        });
+
+        log.debug("Файлы отсортированы по ШК: {}",
+                sortedFiles.stream().map(f -> extractShkNumber(f.getName())).toList());
+        return sortedFiles;
     }
 
     /**
-     * Находит все файлы в директории
+     * Извлекает номер ШК из имени файла
      */
-    private List<File> findAllSourceFiles(String rootPath) {
-        File rootDir = new File(rootPath);
-        if (!rootDir.exists() || !rootDir.isDirectory()) {
-            log.error("Корневая папка не существует: {}", rootPath);
-            return Collections.emptyList();
-        }
-
-        List<File> sourceFiles = new ArrayList<>();
-        FileType[] allTypes = FileType.values();
-
-        for (FileType fileType : allTypes) {
-            File[] files = rootDir.listFiles((dir, name) ->
-                    name.contains(fileType.getInputPattern()) && (name.endsWith(".xlsx") || name.endsWith(".xls"))
-            );
-
-            if (files != null) {
-                Collections.addAll(sourceFiles, files);
-            }
-        }
-
-        log.debug("Найдено файлов: {}", sourceFiles.size());
-        return sourceFiles;
+    private String extractShkNumber(String fileName) {
+        Pattern pattern = Pattern.compile("ШК(\\d+п?)");
+        Matcher matcher = pattern.matcher(fileName);
+        return matcher.find() ? "ШК" + matcher.group(1) : "ШК1";
     }
 
     /**
-     * Извлекает сводные данные из всех файлов
+     * Извлекает числовое значение ШК для сортировки
      */
-    private List<SummaryData> extractSummaryDataFromFiles(List<File> sourceFiles) {
-        Map<String, SummaryData> summaryDataMap = new HashMap<>();
+    private int extractShkNumericValue(String fileName) {
+        Pattern pattern = Pattern.compile("ШК(\\d+)");
+        Matcher matcher = pattern.matcher(fileName);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : 1;
+    }
 
-        for (File sourceFile : sourceFiles) {
-            try (FileInputStream fis = new FileInputStream(sourceFile);
+    /**
+     * Извлекает уникальные наименования РТ из всех файлов
+     */
+    private Set<String> extractUniqueRtNames(List<File> files) {
+        Set<String> uniqueRtNames = new TreeSet<>(this::compareRtNames);
+
+        for (File file : files) {
+            try (FileInputStream fis = new FileInputStream(file);
                  Workbook workbook = WorkbookFactory.create(fis)) {
-
-                FileType fileType = FileType.fromFileName(sourceFile.getName());
-                if (fileType == null) continue;
 
                 Sheet sheet = workbook.getSheet("ЛИСТ2");
                 if (sheet == null) continue;
 
-                extractDataFromSheet(sheet, fileType, summaryDataMap, sourceFile.getName());
+                extractRtNamesFromSheet(sheet, uniqueRtNames);
 
-            } catch (IOException e) {
-                log.error("Ошибка при чтении файла {}: {}", sourceFile.getName(), e.getMessage(), e);
+            } catch (Exception e) {
+                log.warn("⚠️ Не удалось извлечь РТ из файла {}: {}", file.getName(), e.getMessage());
             }
         }
 
-        List<SummaryData> result = new ArrayList<>(summaryDataMap.values());
-        result.sort(Comparator.comparing(SummaryData::getRtName));
-        return result;
+        return uniqueRtNames;
     }
 
     /**
-     * Извлекает данные из листа
+     * Компаратор для сортировки РТ
      */
-    private void extractDataFromSheet(Sheet sheet, FileType fileType, Map<String, SummaryData> summaryDataMap, String fileName) {
+    private int compareRtNames(String rt1, String rt2) {
+        // Сначала числовые РТ (РТ-1, РТ-2...), потом РТ-13К, РТ-14К...
+        boolean isRt1Numeric = rt1.matches("РТ-\\d+$");
+        boolean isRt2Numeric = rt2.matches("РТ-\\d+$");
+
+        if (isRt1Numeric && !isRt2Numeric) return -1;
+        if (!isRt1Numeric && isRt2Numeric) return 1;
+
+        return rt1.compareTo(rt2);
+    }
+
+    /**
+     * Извлекает наименования РТ из листа
+     */
+    private void extractRtNamesFromSheet(Sheet sheet, Set<String> uniqueRtNames) {
         for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             if (row == null) continue;
 
             Cell cellA = row.getCell(0); // Наименование РТ
-            Cell cellB = row.getCell(1); // Тип (УЗД днём/ночью, ПДУ и т.д.)
-            Cell cellL = row.getCell(11); // Lэкв, дБА (колонка L)
-            Cell cellN = row.getCell(13); // Координаты с отметкой
+            Cell cellB = row.getCell(1); // Тип данных
 
             if (isRtRow(cellA, cellB)) {
                 String rtName = getCellStringValue(cellA).trim();
-                String dataType = getCellStringValue(cellB).trim();
-                Double leqvValue = getNumericValue(cellL);
-                String coordinates = getCellStringValue(cellN);
-
-                SummaryData summaryData = summaryDataMap.computeIfAbsent(rtName,
-                        k -> new SummaryData(rtName, extractElevation(coordinates)));
-
-                // Заполняем данные в зависимости от типа
-                fillSummaryData(summaryData, fileType, dataType, leqvValue, fileName);
-
-                log.debug("Извлечены данные для РТ {}: тип={}, Lэкв={}", rtName, dataType, leqvValue);
+                if (!rtName.isEmpty()) {
+                    uniqueRtNames.add(rtName);
+                }
             }
         }
     }
 
     /**
-     * Заполняет сводные данные
+     * Создает рабочую книгу с новой структурой
      */
-    private void fillSummaryData(SummaryData summaryData, FileType fileType, String dataType, Double leqvValue, String fileName) {
-        String timeSuffix = fileName.contains("ночь") ? " (ночь)" : " (день)";
-        String fileTypeName = fileType.getDisplayName() + timeSuffix;
+    private boolean createNewStructureWorkbook(List<File> sortedFiles, List<String> rtNames, File outputFile) {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Сводная таблица УЗД");
 
-        switch (dataType) {
-            case "УЗД днём":
-            case "УЗД ночью":
-                summaryData.getLeqvValues().put(fileTypeName, leqvValue);
-                break;
-            case "ПДУ":
-            case "ПДУ пом.":
-                summaryData.getPduValues().put(fileTypeName, leqvValue);
-                break;
-            case "превышение":
-            case "превышение пом.":
-                summaryData.getExcessValues().put(fileTypeName, leqvValue);
-                break;
+            // Настраиваем layout
+            setupNewStructureLayout(sheet, rtNames.size());
+
+            // Создаем шапку таблицы с РТ
+            createNewStructureHeader(workbook, sheet, rtNames);
+
+            // Заполняем данные из файлов
+            fillNewStructureData(workbook, sheet, sortedFiles, rtNames);
+
+            // Сохраняем файл
+            outputFile.getParentFile().mkdirs();
+            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+                workbook.write(fos);
+            }
+
+            log.info("✅ Успешно создана сводная таблица с новой структурой: {}", outputFile.getAbsolutePath());
+            return true;
+
+        } catch (IOException e) {
+            log.error("❌ Ошибка при создании сводной таблицы: {}", e.getMessage(), e);
+            return false;
         }
     }
 
     /**
-     * Проверяет, является ли строка строкой РТ
+     * Настраивает layout для новой структуры
      */
-    private boolean isRtRow(Cell cellA, Cell cellB) {
+    private void setupNewStructureLayout(Sheet sheet, int numRt) {
+        // Ширина колонки A (фиксированные заголовки)
+        sheet.setColumnWidth(0, 4000);
+
+        // Ширина колонок с данными РТ
+        int dataColumnWidth = 2000;
+        for (int i = 1; i <= numRt + 1; i++) {
+            sheet.setColumnWidth(i, dataColumnWidth);
+        }
+
+        sheet.setDefaultRowHeightInPoints(20);
+    }
+
+    /**
+     * Создает шапку таблицы с новой структурой
+     */
+    private void createNewStructureHeader(Workbook workbook, Sheet sheet, List<String> rtNames) {
+        // Строка 1: "Расчетная точка (РТ)"
+        Row row1 = sheet.createRow(0);
+        Cell cellA1 = row1.createCell(0);
+        cellA1.setCellValue("Расчетная точка (РТ)");
+
+        // Заполняем наименования РТ
+        for (int i = 0; i < rtNames.size(); i++) {
+            Cell cell = row1.createCell(i + 1);
+            cell.setCellValue(rtNames.get(i));
+        }
+
+        // Строка 2: "Отметка, м"
+        Row row2 = sheet.createRow(1);
+        Cell cellA2 = row2.createCell(0);
+        cellA2.setCellValue("Отметка, м");
+
+        // Строка 3: "Тип территории"
+        Row row3 = sheet.createRow(2);
+        Cell cellA3 = row3.createCell(0);
+        cellA3.setCellValue("Тип территории");
+
+        // Применяем стили к шапке
+        applyNewHeaderStyles(workbook, sheet, 0, 2, rtNames.size() + 1);
+    }
+
+    /**
+     * Применяет стили к новой шапке
+     */
+    private void applyNewHeaderStyles(Workbook workbook, Sheet sheet, int startRow, int endRow, int numColumns) {
+        CellStyle headerStyle = createHeaderStyle(workbook);
+
+        for (int rowNum = startRow; rowNum <= endRow; rowNum++) {
+            Row row = sheet.getRow(rowNum);
+            if (row != null) {
+                for (int colNum = 0; colNum < numColumns; colNum++) {
+                    Cell cell = row.getCell(colNum);
+                    if (cell != null) {
+                        cell.setCellStyle(headerStyle);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Заполняет данные с новой структурой
+     */
+    private void fillNewStructureData(Workbook workbook, Sheet sheet, List<File> files, List<String> rtNames) {
+        int currentRow = 3;
+
+        log.info("🔍 НАЧАЛО ЗАПОЛНЕНИЯ ДАННЫХ");
+        log.info("📋 Файлов для обработки: {}", files.size());
+
+        // Логируем все файлы
+        for (int i = 0; i < files.size(); i++) {
+            File file = files.get(i);
+            log.info("   {}. {} -> ШК{}", i + 1, file.getName(), extractShkNumber(file.getName()));
+        }
+
+        for (File file : files) {
+            try {
+                log.info("🔄 ОБРАБОТКА: {} в строке {}", file.getName(), currentRow);
+
+                // Проверяем, что строка свободна
+                if (currentRow <= sheet.getLastRowNum()) {
+                    Row existingRow = sheet.getRow(currentRow);
+                    if (existingRow != null) {
+                        log.warn("⚠️ Строка {} уже занята! Содержимое: {}", currentRow,
+                                getRowDebugInfo(existingRow));
+                    }
+                }
+
+                currentRow = processFileBlock(workbook, sheet, file, rtNames, currentRow);
+
+            } catch (Exception e) {
+                log.warn("⚠️ Ошибка при обработке файла {}: {}", file.getName(), e.getMessage());
+            }
+        }
+
+        log.info("✅ ЗАВЕРШЕНО. Всего строк: {}", currentRow - 3);
+    }
+
+    /**
+     * Отладочная информация о строке
+     */
+    private String getRowDebugInfo(Row row) {
+        if (row == null) return "null";
+        StringBuilder info = new StringBuilder();
+        for (int i = 0; i < Math.min(5, row.getLastCellNum()); i++) {
+            Cell cell = row.getCell(i);
+            if (cell != null) {
+                info.append("[").append(i).append(":").append(getCellStringValue(cell)).append("] ");
+            }
+        }
+        return info.toString();
+    }
+    /**
+     * Обрабатывает блок данных из одного файла (3 строки)
+     */
+    /**
+     * Обрабатывает блок данных из одного файла (3 строки С ДАННЫМИ)
+     */
+    private int processFileBlock(Workbook workbook, Sheet sheet, File file, List<String> rtNames, int startRow) {
+        String fileName = file.getName();
+        String shkNumber = extractShkNumber(fileName);
+        FileType fileType = FileType.fromFileName(fileName);
+
+        if (fileType == null) {
+            return startRow;
+        }
+
+        String timeOfDay = fileType.getDisplayName().contains("ночь") ? "ночь" : "день";
+        String blockHeader = shkNumber + ", " + timeOfDay;
+
+        log.info("📊 Обработка блока: {} -> {}", fileName, blockHeader);
+
+        // Создаем 3 строки для блока С ДАННЫМИ
+        Row noiseRow = sheet.createRow(startRow);
+        Row pduRow = sheet.createRow(startRow + 1);
+        Row excessRow = sheet.createRow(startRow + 2);
+
+        // Заполняем заголовки в колонке A
+        noiseRow.createCell(0).setCellValue(blockHeader);
+        pduRow.createCell(0).setCellValue("ПДУ");
+        excessRow.createCell(0).setCellValue("Превышение");
+
+        // Извлекаем данные из файла
+        try (FileInputStream fis = new FileInputStream(file);
+             Workbook fileWorkbook = WorkbookFactory.create(fis)) {
+
+            Sheet fileSheet = fileWorkbook.getSheet("ЛИСТ2");
+            if (fileSheet != null) {
+                Map<String, FileData> fileData = extractFileData(fileSheet, rtNames);
+
+                // ЗАПОЛНЯЕМ ДАННЫЕ В ТЕ ЖЕ САМЫЕ СТРОКИ
+                for (int i = 0; i < rtNames.size(); i++) {
+                    String rtName = rtNames.get(i);
+                    FileData data = fileData.get(rtName);
+                    int colIndex = i + 1;
+
+                    if (data != null) {
+                        // УЗД данные в ПЕРВУЮ строку блока
+                        if (data.noiseLevel != null) {
+                            noiseRow.createCell(colIndex).setCellValue(data.noiseLevel);
+                        }
+
+                        // ПДУ значения во ВТОРУЮ строку блока
+                        if (data.pduValue != null) {
+                            pduRow.createCell(colIndex).setCellValue(data.pduValue);
+                        }
+
+                        // Превышения в ТРЕТЬЮ строку блока
+                        if (data.excessValue != null) {
+                            excessRow.createCell(colIndex).setCellValue(data.excessValue);
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            log.warn("⚠️ Ошибка при извлечении данных из файла {}: {}", fileName, e.getMessage());
+        }
+
+        // Применяем стили к блоку
+        applyBlockStyles(workbook, sheet, startRow, startRow + 2, rtNames.size() + 1);
+
+        return startRow + 3; // Переходим к следующему блоку
+    }
+    /**
+     * Извлекает данные из файла с учетом группировки по РТ через пустые строки
+     */
+    private Map<String, FileData> extractFileData(Sheet sheet, List<String> rtNames) {
+        Map<String, FileData> fileData = new HashMap<>();
+        String currentRt = null;
+
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) continue;
+
+            Cell cellA = row.getCell(0); // Столбец A - наименование РТ
+            Cell cellB = row.getCell(1); // Столбец B - тип данных
+            Cell cellL = row.getCell(11); // Столбец L - значение
+
+            // Проверяем, является ли строка началом новой группы РТ
+            if (isNewRtGroup(cellA, cellB)) {
+                currentRt = getCellStringValue(cellA).trim();
+
+                // Если это новая РТ из нашего списка, создаем для нее запись
+                if (rtNames.contains(currentRt)) {
+                    fileData.putIfAbsent(currentRt, new FileData());
+                } else {
+                    currentRt = null; // Пропускаем РТ не из списка
+                }
+            }
+
+            // Если мы внутри группы РТ, обрабатываем данные
+            if (currentRt != null && cellB != null) {
+                processDataRow(fileData.get(currentRt), cellB, cellL);
+            }
+        }
+
+        return fileData;
+    }
+
+    /**
+     * Проверяет, является ли строка началом новой группы РТ
+     */
+    private boolean isNewRtGroup(Cell cellA, Cell cellB) {
         if (cellA == null || cellB == null) return false;
 
         String valueA = getCellStringValue(cellA).trim();
         String valueB = getCellStringValue(cellB).trim();
 
+        // Новая группа РТ: есть название РТ в столбце A и "УЗД" в столбце B
         boolean isRtFormat = valueA.matches("РТ-?\\d+.*");
-        boolean isValidType = "УЗД днём".equals(valueB) || "УЗД ночью".equals(valueB) ||
-                "ПДУ".equals(valueB) || "ПДУ пом.".equals(valueB) ||
-                "превышение".equals(valueB) || "превышение пом.".equals(valueB);
+        boolean isUzdType = valueB.contains("УЗД");
 
-        return isRtFormat && isValidType;
+        return isRtFormat && isUzdType;
     }
 
     /**
-     * Извлекает отметку высоты из координат
+     * Обрабатывает строку данных внутри группы РТ
      */
-    private Double extractElevation(String coordinates) {
-        if (coordinates == null || coordinates.isEmpty()) return null;
-        try {
-            // Пример координат: "x:123.456 y:789.012 z:15.678"
-            String[] parts = coordinates.split(" ");
-            for (String part : parts) {
-                if (part.startsWith("z:") || part.contains(":")) {
-                    String[] keyValue = part.split(":");
-                    if (keyValue.length == 2) {
-                        return Double.parseDouble(keyValue[1].trim());
+    private void processDataRow(FileData data, Cell cellB, Cell cellL) {
+        String dataType = getCellStringValue(cellB).trim();
+        Double value = getNumericValue(cellL);
+
+        if (dataType.contains("УЗД")) {
+            // УЗД днём/ночью - основное значение шума
+            data.noiseLevel = value;
+        } else if (dataType.contains("ПДУ")) {
+            // ПДУ или ПДУ пом. - допустимый уровень
+            data.pduValue = value;
+        } else if (dataType.contains("превышение")) {
+            // Превышение - текстовое значение (+/-)
+            data.excessValue = value != null ? (value > 0 ? "+" : "-") : "";
+        }
+    }
+
+    /**
+     * Заполняет данные блока
+     */
+    private void fillBlockData(Row noiseRow, Row pduRow, Row excessRow, Map<String, FileData> fileData, List<String> rtNames) {
+        for (int i = 0; i < rtNames.size(); i++) {
+            String rtName = rtNames.get(i);
+            FileData data = fileData.get(rtName);
+            int colIndex = i + 1;
+
+            if (data != null) {
+                // УЗД данные
+                if (data.noiseLevel != null) {
+                    noiseRow.createCell(colIndex).setCellValue(data.noiseLevel);
+                }
+
+                // ПДУ значения
+                if (data.pduValue != null) {
+                    pduRow.createCell(colIndex).setCellValue(data.pduValue);
+                }
+
+                // Превышения
+                if (data.excessValue != null) {
+                    excessRow.createCell(colIndex).setCellValue(data.excessValue);
+                }
+            }
+        }
+    }
+
+    /**
+     * Применяет стили к блоку данных
+     */
+    private void applyBlockStyles(Workbook workbook, Sheet sheet, int startRow, int endRow, int numColumns) {
+        CellStyle dataStyle = createDataStyle(workbook);
+
+        for (int rowNum = startRow; rowNum <= endRow; rowNum++) {
+            Row row = sheet.getRow(rowNum);
+            if (row != null) {
+                for (int colNum = 0; colNum < numColumns; colNum++) {
+                    Cell cell = row.getCell(colNum);
+                    if (cell != null) {
+                        cell.setCellStyle(dataStyle);
                     }
                 }
             }
-        } catch (Exception e) {
-            log.debug("Не удалось извлечь высоту из координат: {}", coordinates);
         }
-        return null;
     }
 
     /**
-     * Создает папку для вывода
+     * Создает стиль для заголовков
      */
+    private CellStyle createHeaderStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setWrapText(true);
+
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 11);
+        style.setFont(font);
+
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+
+        style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        return style;
+    }
+
+    /**
+     * Создает стиль для данных
+     */
+    private CellStyle createDataStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setWrapText(true);
+
+        Font font = workbook.createFont();
+        font.setFontHeightInPoints((short) 10);
+        style.setFont(font);
+
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+
+        return style;
+    }
+
+    // Остальные методы без изменений (findAllSourceFiles, createOutputFolder, createOutputFile, etc.)
+    private List<File> findAllSourceFiles(String rootPath) {
+        try {
+            List<File> sourceFiles = new ArrayList<>();
+            FileType[] allTypes = FileType.values();
+
+            Files.walk(Paths.get(rootPath))
+                    .filter(Files::isRegularFile)
+                    .filter(path -> {
+                        String fileName = path.getFileName().toString();
+                        String lowerFileName = fileName.toLowerCase();
+                        return (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) &&
+                                FileType.isSupportedFile(fileName) &&
+                                !lowerFileName.contains("В записку"); // ← исключаем
+                    })
+                    .forEach(path -> sourceFiles.add(path.toFile()));
+
+            log.info("Найдено файлов для сводной таблицы: {}", sourceFiles.size());
+            return sourceFiles;
+
+        } catch (IOException e) {
+            log.error("Ошибка при поиске файлов: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
     private File createOutputFolder(String rootPath) {
         File rootDir = new File(rootPath);
         String folderName = rootDir.getName() + "_Сводная таблица УЗД в расчетных точках, в дБА";
@@ -246,246 +594,46 @@ public class SummaryTableCreator implements TableCreator {
         return outputFolder;
     }
 
-    /**
-     * Создает файл для вывода
-     */
     private File createOutputFile(File outputFolder) {
         String fileName = outputFolder.getName() + ".xlsx";
         return new File(outputFolder, fileName);
     }
 
-    /**
-     * Создает рабочую книгу со сводной таблицей
-     */
-    private boolean createSummaryWorkbook(List<SummaryData> summaryDataList, File outputFile) {
-        try (Workbook workbook = new XSSFWorkbook()) {
-            Sheet sheet = workbook.createSheet("Сводная таблица УЗД");
-
-            // Настраиваем layout
-            setupSheetLayout(sheet);
-
-            // Создаем шапку таблицы
-            createTableHeader(workbook, sheet, summaryDataList);
-
-            // Заполняем данными
-            fillTableData(workbook, sheet, summaryDataList);
-
-            // Применяем стили
-            styleApplier.applyTableBorders(sheet);
-
-            // Сохраняем файл
-            outputFile.getParentFile().mkdirs();
-            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-                workbook.write(fos);
-            }
-
-            log.info("✅ Успешно создана сводная таблица: {}", outputFile.getAbsolutePath());
-            return true;
-
-        } catch (IOException e) {
-            log.error("❌ Ошибка при создании сводной таблицы: {}", e.getMessage(), e);
-            return false;
-        }
+    private boolean isRtRow(Cell cellA, Cell cellB) {
+        if (cellA == null || cellB == null) return false;
+        String valueA = getCellStringValue(cellA).trim();
+        String valueB = getCellStringValue(cellB).trim();
+        boolean isRtFormat = valueA.matches("РТ-?\\d+.*");
+        boolean isValidType = valueB.contains("УЗД") || valueB.contains("ПДУ") || valueB.contains("превышение");
+        return isRtFormat && isValidType;
     }
 
-    /**
-     * Настраивает layout листа
-     */
-    private void setupSheetLayout(Sheet sheet) {
-        // Устанавливаем ширину колонок (18см = ~18*4.5*256 = 20736 units)
-        int columnWidthUnits = (int) (18.0 * 4.5 * 256);
-
-        sheet.setColumnWidth(0, columnWidthUnits / 6); // Колонка A - 3см
-        sheet.setColumnWidth(1, columnWidthUnits / 6); // Колонка B - 3см
-
-        // Динамическая ширина для остальных колонок
-        for (int i = 2; i < 20; i++) {
-            sheet.setColumnWidth(i, columnWidthUnits / 12); // По 1.5см
-        }
-
-        // Высота строк
-        sheet.setDefaultRowHeightInPoints(20);
-    }
-
-    /**
-     * Создает шапку таблицы
-     */
-    private void createTableHeader(Workbook workbook, Sheet sheet, List<SummaryData> summaryDataList) {
-        // Первая строка - основные заголовки
-        Row headerRow1 = sheet.createRow(0);
-        headerRow1.setHeightInPoints(25);
-
-        // Вторая строка - подзаголовки
-        Row headerRow2 = sheet.createRow(1);
-        headerRow2.setHeightInPoints(20);
-
-        // Заполняем заголовки
-        createHeaderCells(workbook, headerRow1, headerRow2, summaryDataList);
-
-        // Объединяем ячейки для основных заголовков
-        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 1));
-        sheet.addMergedRegion(new CellRangeAddress(0, 1, 0, 1));
-    }
-
-    /**
-     * Создает ячейки заголовков
-     */
-    private void createHeaderCells(Workbook workbook, Row headerRow1, Row headerRow2, List<SummaryData> summaryDataList) {
-        // Основные заголовки
-        createHeaderCell(workbook, headerRow1, 0, "Расчетные точки");
-        createHeaderCell(workbook, headerRow1, 1, "Отметка, м");
-
-        // Получаем все уникальные типы данных
-        Set<String> allDataTypes = getAllDataTypes(summaryDataList);
-        int colIndex = 2;
-
-        for (String dataType : allDataTypes) {
-            createHeaderCell(workbook, headerRow1, colIndex, dataType);
-            createHeaderCell(workbook, headerRow2, colIndex, "Lэкв, дБА");
-            colIndex++;
-        }
-    }
-
-    /**
-     * Получает все уникальные типы данных
-     */
-    private Set<String> getAllDataTypes(List<SummaryData> summaryDataList) {
-        Set<String> dataTypes = new TreeSet<>();
-        for (SummaryData data : summaryDataList) {
-            dataTypes.addAll(data.getLeqvValues().keySet());
-            dataTypes.addAll(data.getPduValues().keySet());
-            dataTypes.addAll(data.getExcessValues().keySet());
-        }
-        return dataTypes;
-    }
-
-    /**
-     * Заполняет таблицу данными
-     */
-    private void fillTableData(Workbook workbook, Sheet sheet, List<SummaryData> summaryDataList) {
-        Set<String> allDataTypes = getAllDataTypes(summaryDataList);
-        List<String> sortedDataTypes = new ArrayList<>(allDataTypes);
-        Collections.sort(sortedDataTypes);
-
-        for (int i = 0; i < summaryDataList.size(); i++) {
-            SummaryData data = summaryDataList.get(i);
-            Row row = sheet.createRow(i + 2); // +2 потому что две строки заголовков
-
-            // Наименование РТ
-            Cell cellA = row.createCell(0);
-            cellA.setCellValue(data.getRtName());
-
-            // Отметка высоты
-            Cell cellB = row.createCell(1);
-            if (data.getElevation() != null) {
-                cellB.setCellValue(data.getElevation());
-            } else {
-                cellB.setCellValue("-");
-            }
-
-            // Данные по типам
-            int colIndex = 2;
-            for (String dataType : sortedDataTypes) {
-                Cell cell = row.createCell(colIndex);
-
-                Double leqvValue = data.getLeqvValues().get(dataType);
-                Double pduValue = data.getPduValues().get(dataType);
-                Double excessValue = data.getExcessValues().get(dataType);
-
-                // Приоритет: Lэкв > ПДУ > превышение
-                if (leqvValue != null) {
-                    cell.setCellValue(leqvValue);
-                } else if (pduValue != null) {
-                    cell.setCellValue(pduValue);
-                } else if (excessValue != null) {
-                    cell.setCellValue(excessValue);
-                } else {
-                    cell.setCellValue("-");
-                }
-
-                styleApplier.applyCellStyleWithFont(cell);
-                colIndex++;
-            }
-
-            // Применяем стиль к основным ячейкам
-            styleApplier.applyCellStyleWithFont(cellA);
-            styleApplier.applyCellStyleWithFont(cellB);
-        }
-
-        log.debug("Заполнено {} строк данными", summaryDataList.size());
-    }
-
-    /**
-     * Создает ячейку заголовка
-     */
-    private void createHeaderCell(Workbook workbook, Row headerRow, int colIndex, String value) {
-        Cell cell = headerRow.createCell(colIndex);
-        cell.setCellValue(value);
-
-        CellStyle headerStyle = workbook.createCellStyle();
-        headerStyle.setAlignment(HorizontalAlignment.CENTER);
-        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-        headerStyle.setWrapText(true);
-
-        Font font = workbook.createFont();
-        font.setBold(true);
-        font.setFontHeightInPoints((short) 10);
-        headerStyle.setFont(font);
-
-        headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
-        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        headerStyle.setBorderTop(BorderStyle.THIN);
-        headerStyle.setBorderBottom(BorderStyle.THIN);
-        headerStyle.setBorderLeft(BorderStyle.THIN);
-        headerStyle.setBorderRight(BorderStyle.THIN);
-
-        cell.setCellStyle(headerStyle);
-    }
-
-    /**
-     * Вспомогательный метод для получения строкового значения ячейки
-     */
     private String getCellStringValue(Cell cell) {
         if (cell == null) return "";
         try {
             switch (cell.getCellType()) {
-                case STRING:
-                    return cell.getStringCellValue();
+                case STRING: return cell.getStringCellValue();
                 case NUMERIC:
                     if (DateUtil.isCellDateFormatted(cell)) {
                         return cell.getDateCellValue().toString();
                     } else {
                         double value = cell.getNumericCellValue();
-                        if (value == Math.floor(value) && !Double.isInfinite(value)) {
-                            return String.valueOf((int) value);
-                        } else {
-                            return String.valueOf(value);
-                        }
+                        return value == Math.floor(value) ? String.valueOf((int) value) : String.valueOf(value);
                     }
-                case BOOLEAN:
-                    return String.valueOf(cell.getBooleanCellValue());
+                case BOOLEAN: return String.valueOf(cell.getBooleanCellValue());
                 case FORMULA:
-                    try {
-                        return cell.getStringCellValue();
-                    } catch (Exception e) {
-                        try {
-                            return String.valueOf(cell.getNumericCellValue());
-                        } catch (Exception ex) {
-                            return cell.getCellFormula();
-                        }
+                    try { return cell.getStringCellValue(); }
+                    catch (Exception e) {
+                        try { return String.valueOf(cell.getNumericCellValue()); }
+                        catch (Exception ex) { return cell.getCellFormula(); }
                     }
-                default:
-                    return "";
+                default: return "";
             }
         } catch (Exception e) {
             return "";
         }
     }
 
-    /**
-     * Вспомогательный метод для получения числового значения ячейки
-     */
     private Double getNumericValue(Cell cell) {
         if (cell == null || cell.getCellType() != CellType.NUMERIC) return null;
         try {
@@ -496,24 +644,16 @@ public class SummaryTableCreator implements TableCreator {
     }
 
     /**
-     * Класс для хранения сводных данных
+     * Вспомогательный класс для хранения данных файла
      */
-    private static class SummaryData {
-        private final String rtName;
-        private final Double elevation;
-        private final Map<String, Double> leqvValues = new HashMap<>(); // Lэкв по типам
-        private final Map<String, Double> pduValues = new HashMap<>();  // ПДУ по типам
-        private final Map<String, Double> excessValues = new HashMap<>(); // Превышения по типам
+    private static class FileData {
+        Double noiseLevel;
+        Double pduValue;
+        String excessValue;
+    }
 
-        public SummaryData(String rtName, Double elevation) {
-            this.rtName = rtName;
-            this.elevation = elevation;
-        }
-
-        public String getRtName() { return rtName; }
-        public Double getElevation() { return elevation; }
-        public Map<String, Double> getLeqvValues() { return leqvValues; }
-        public Map<String, Double> getPduValues() { return pduValues; }
-        public Map<String, Double> getExcessValues() { return excessValues; }
+    // Метод для обратной совместимости
+    public boolean createSummaryTable(String rootPath, boolean createSummaryTable) {
+        return createTable(rootPath, createSummaryTable);
     }
 }

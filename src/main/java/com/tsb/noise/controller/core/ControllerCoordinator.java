@@ -78,7 +78,7 @@ public class ControllerCoordinator {
         // Initialize views
         this.folderNavigationView = new FolderNavigationView(alertHandler, logManager, openFolderCallback);
         this.processingView = new ProcessingView(processingHandler, progressManager, statusManager,
-                alertHandler, logManager,
+                alertHandler, logManager, summaryTableCreator,
                 directoryHandler::getCurrentPath,
                 fileTypeManager::getSelectedFileTypes,
                 operationManager::isRemoveSoundIsolationEnabled,
@@ -87,6 +87,7 @@ public class ControllerCoordinator {
                 operationManager::isCreateRtListEnabled,
                 operationManager::isCreateSummaryTableEnabled,
                 updateUIStateCallback);
+
 
         // Setup UI
         setupUI(selectPathButton, startProcessButton, openOutputButton, updateUIStateCallback);
