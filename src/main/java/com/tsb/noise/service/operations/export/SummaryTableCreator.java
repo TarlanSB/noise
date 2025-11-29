@@ -565,7 +565,7 @@ public class SummaryTableCreator implements TableCreator {
                         String lowerFileName = fileName.toLowerCase();
                         return (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) &&
                                 FileType.isSupportedFile(fileName) &&
-                                !lowerFileName.contains("В записку"); // ← исключаем
+                                !lowerFileName.contains("в записку"); // ← исключаем
                     })
                     .forEach(path -> sourceFiles.add(path.toFile()));
 
